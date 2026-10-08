@@ -1,0 +1,19 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+      - name: The prebuilt library (the version in CHANGELOG.md's latest entry)
+        run: |
+          v="$(sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' CHANGELOG.md | head -1)"
+          scripts/fetch-binary.sh "$v"
+      - name: Build (library and example)
+        run: swift build
+      - name: Test
+        run: swift test

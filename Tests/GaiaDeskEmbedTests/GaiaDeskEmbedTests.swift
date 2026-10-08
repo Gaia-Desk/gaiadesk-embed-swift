@@ -35,6 +35,15 @@ final class GaiaDeskEmbedTests: XCTestCase {
         let o = try JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
         XCTAssertEqual(o["capture"] as? String, "window")
         XCTAssertEqual(o["guided"] as? Bool, false)
+        XCTAssertNil(o["masks"], "no masks key unless the app names some")
+    }
+
+    func testMasksGoInTheStartConfig() throws {
+        let c = GaiaDeskEmbed.Configuration(embedToken: token, company: "Acme", maskedRects: [CGRect(x: 10, y: 20, width: 100, height: 30)])
+        let json = try GaiaDeskEmbed.configJSON(c, consentGranted: true)
+        let o = try JSONSerialization.jsonObject(with: Data(json.utf8)) as! [String: Any]
+        let masks = o["masks"] as! [[String: Double]]
+        XCTAssertEqual(masks, [["x": 10, "y": 20, "w": 100, "h": 30]])
     }
 
     func testEventsParse() {

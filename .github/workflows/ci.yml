@@ -9,10 +9,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
-      - name: The prebuilt library (the version in CHANGELOG.md's latest entry)
-        run: |
-          v="$(sed -n 's/^## \([0-9][0-9.]*\).*/\1/p' CHANGELOG.md | head -1)"
-          scripts/fetch-binary.sh "$v"
+      # SwiftPM downloads the library from this repo's release (Package.swift's checksum).
       - name: Build (library and example)
         run: swift build
       - name: Test

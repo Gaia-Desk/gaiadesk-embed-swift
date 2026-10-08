@@ -105,12 +105,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             emit(["type": "demo", "consent": false])
             return
         }
-        var config = GaiaDeskEmbed.Configuration(embedToken: (env["GAIADESK_EMBED_TOKEN"] ?? token.stringValue).trimmingCharacters(in: .whitespaces), company: "Acme", windowNumber: window.windowNumber, guided: guided)
+        // The card's mask goes in the start config: it covers the very first frame.
+        let masks = GaiaDeskEmbed.rectInWindow(card).map { [$0] } ?? []
+        var config = GaiaDeskEmbed.Configuration(embedToken: (env["GAIADESK_EMBED_TOKEN"] ?? token.stringValue).trimmingCharacters(in: .whitespaces), company: "Acme", windowNumber: window.windowNumber, guided: guided, maskedRects: masks)
         if let s = env["GAIADESK_SERVER"] { config.server = URL(string: s) }
         do {
             let h = try GaiaDeskEmbed.start(config, consentGranted: true) { [weak self] e in self?.on(e) }
             help = h
-            try h.setMaskedViews([card])
         } catch let e as GaiaDeskEmbedError {
             status.stringValue = "Could not start: \(e.message)"
             emit(["type": "demo", "start_error": e.code])

@@ -45,8 +45,12 @@ public final class GaiaDeskEmbed {
         public var guided: Bool
         /// 1 to 30.
         public var fps: Int
+        /// Regions painted out from the very first frame (window-relative,
+        /// top-left origin, points: `rectInWindow` gives one for a view).
+        /// Pass the ones you know here; `setMaskedRects` replaces them later.
+        public var maskedRects: [CGRect]
 
-        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15) {
+        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = []) {
             self.embedToken = embedToken
             self.server = server
             self.company = company
@@ -54,6 +58,7 @@ public final class GaiaDeskEmbed {
             self.windowNumber = windowNumber
             self.guided = guided
             self.fps = fps
+            self.maskedRects = maskedRects
         }
     }
 
@@ -175,6 +180,9 @@ public final class GaiaDeskEmbed {
         ]
         if let s = c.server { o["server"] = s.absoluteString }
         if let w = c.windowNumber { o["window_id"] = w }
+        if !c.maskedRects.isEmpty {
+            o["masks"] = c.maskedRects.map { ["x": Double($0.origin.x), "y": Double($0.origin.y), "w": Double($0.width), "h": Double($0.height)] }
+        }
         let data = try JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }

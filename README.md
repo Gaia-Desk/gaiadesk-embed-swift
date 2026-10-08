@@ -30,9 +30,10 @@ allow it, guide it: click and type **inside your app only**.
 .product(name: "GaiaDeskEmbed", package: "gaiadesk-embed-swift"),
 ```
 
-The native library comes from this repository's releases: `scripts/fetch-binary.sh 0.1.0` puts
-`GaiaDeskEmbedFFI.xcframework` in `Frameworks/` (SwiftPM checks it against the release's
-checksum). Your app needs the **Screen Recording** permission (`NSScreenCaptureUsageDescription`
+SwiftPM downloads the native library (`GaiaDeskEmbedFFI.xcframework`) from this repository's
+release and checks it against the checksum in `Package.swift`. To build against a local copy
+(`scripts/fetch-binary.sh 0.1.0` puts the release's in `Frameworks/`), set
+`GAIADESK_EMBED_LOCAL_BINARY=1`. Your app needs the **Screen Recording** permission (`NSScreenCaptureUsageDescription`
 is not required, but macOS asks the user the first time).
 
 ## Quick start
@@ -88,10 +89,13 @@ Your support team opens **Support** in the GaiaDesk console, sees the waiting cu
 | `capture` | `.window` (default: `windowNumber`, or your frontmost window), `.app` (every window of your app), `.screen` (the whole display — opt-in) |
 | `guided` | `false` (default). `true` allows guided input in a `cobrowse` session |
 | `fps` | 1–30 (default 15) |
+| `maskedRects` | regions painted out from the first frame (see Masking) |
 
 ### Masking
 
-`setMaskedViews(_:)` takes views; `setMaskedRects(_:)` takes rects relative to the top-left of the
+Pass the regions you already know in `maskedRects` when you start (`rectInWindow(_:)` turns a
+view into one): an agent can join straight away, and only start-time masks are guaranteed to
+cover the first frame. Afterwards, `setMaskedViews(_:)` takes views; `setMaskedRects(_:)` takes rects relative to the top-left of the
 shared window's frame, in points. Call again when your layout changes. If the window cannot be
 located, the whole picture is painted out rather than risk a leak.
 

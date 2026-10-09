@@ -1,8 +1,14 @@
 # GaiaDeskEmbed (Swift, macOS)
 
-A **"Get help" button for your Mac app**. Your customer clicks it and agrees; **your app's window**
-is shared with **your** support team, who see it in the GaiaDesk console's Support page and, if you
-allow it, guide it: click and type **inside your app only**.
+[![CI](https://github.com/Gaia-Desk/gaiadesk-embed-swift/actions/workflows/ci.yml/badge.svg)](https://github.com/Gaia-Desk/gaiadesk-embed-swift/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Gaia-Desk/gaiadesk-embed-swift)](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
+[![SwiftPM compatible](https://img.shields.io/badge/SwiftPM-compatible-brightgreen)](#install)
+[![License: MIT + binary licence](https://img.shields.io/badge/license-MIT%20%2B%20binary%20licence-blue)](#licence)
+
+A **"Get help" button for your Mac app**: in-app remote support and a screen sharing SDK for
+macOS in Swift, for customer support with optional guided control. Your customer clicks it and
+agrees; **your app's window** is shared with **your** support team, who see it in the GaiaDesk
+console's Support page and, if you allow it, guide it: click and type **inside your app only**.
 
 - Swift Package wrapping `libgaiadesk_embed` (a prebuilt universal XCFramework, Apple silicon and
   Intel, macOS 12.3+).
@@ -128,6 +134,13 @@ Events arrive on the main queue.
 ```sh
 GAIADESK_EMBED_TOKEN=gdemb_… swift run HelpDeskDemo
 ```
+
+## Links
+
+- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.1.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
+- Guide: [Embedding GaiaDesk](https://gaiadesk.net/docs/embedding-gaiadesk) on gaiadesk.net
+- Embed SDKs: [Web](https://github.com/Gaia-Desk/gaiadesk-embed) · [Electron](https://github.com/Gaia-Desk/gaiadesk-embed-electron) · [macOS (Swift)](https://github.com/Gaia-Desk/gaiadesk-embed-swift) · [C/C++ and Qt](https://github.com/Gaia-Desk/gaiadesk-embed-cpp) · [.NET](https://github.com/Gaia-Desk/gaiadesk-embed-dotnet) · [iOS](https://github.com/Gaia-Desk/gaiadesk-embed-ios) · [Android](https://github.com/Gaia-Desk/gaiadesk-embed-android) · [React Native](https://github.com/Gaia-Desk/gaiadesk-embed-react-native) · [Flutter](https://github.com/Gaia-Desk/gaiadesk-embed-flutter)
+- [Changelog](CHANGELOG.md) · [Security policy](https://github.com/Gaia-Desk/.github/blob/main/SECURITY.md)
 
 ## Licence
 

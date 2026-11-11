@@ -49,8 +49,14 @@ public final class GaiaDeskEmbed {
         /// top-left origin, points: `rectInWindow` gives one for a view).
         /// Pass the ones you know here; `setMaskedRects` replaces them later.
         public var maskedRects: [CGRect]
+        /// Your brand colour, `"#RRGGBB"`: the indicator's stripe and Stop
+        /// button; nil: the library's own. Needs libgaiadesk_embed 0.2.0.
+        public var brandColor: String?
+        /// Your logo, PNG bytes (at most 256 KiB), shown small on the
+        /// indicator. Needs libgaiadesk_embed 0.2.0.
+        public var logoPNG: Data?
 
-        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = []) {
+        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = [], brandColor: String? = nil, logoPNG: Data? = nil) {
             self.embedToken = embedToken
             self.server = server
             self.company = company
@@ -59,6 +65,29 @@ public final class GaiaDeskEmbed {
             self.guided = guided
             self.fps = fps
             self.maskedRects = maskedRects
+            self.brandColor = brandColor
+            self.logoPNG = logoPNG
+        }
+    }
+
+    /// The consent dialog's question, in your look (`requestConsent(_:)`;
+    /// libgaiadesk_embed 0.2.0).
+    public struct ConsentOptions: Sendable {
+        public var company: String
+        public var capture: Capture
+        /// Say the agent may click and type.
+        public var guided: Bool
+        /// `"#RRGGBB"`: the dialog's accent; nil: the system's own.
+        public var brandColor: String?
+        /// PNG bytes (at most 256 KiB), shown small on the dialog.
+        public var logoPNG: Data?
+
+        public init(company: String, capture: Capture = .window, guided: Bool = false, brandColor: String? = nil, logoPNG: Data? = nil) {
+            self.company = company
+            self.capture = capture
+            self.guided = guided
+            self.brandColor = brandColor
+            self.logoPNG = logoPNG
         }
     }
 
@@ -73,7 +102,7 @@ public final class GaiaDeskEmbed {
         case ended(reason: String)
     }
 
-    /// The library's version ("0.1.0").
+    /// The library's version ("0.2.0").
     public static var version: String { String(cString: gd_embed_version()) }
 
     /// What the bundled binary is (JSON: version, codec, os, arch, test_source).
@@ -86,6 +115,23 @@ public final class GaiaDeskEmbed {
         switch gd_embed_show_consent(company, capture.rawValue, guided ? 1 : 0) {
         case 1: return true
         case 0: return false
+        default: return nil
+        }
+    }
+
+    /// The consent dialog in your look: `requestConsent(company:…)` plus your
+    /// colour and logo (the library's `gd_embed_show_consent_ex`). Main
+    /// thread. Returns whether the user agreed; `nil` when called off the
+    /// main thread. Throws `bad_config` for a colour or logo that is refused
+    /// (no dialog is shown): that is never a decline.
+    @MainActor
+    public static func requestConsent(_ options: ConsentOptions) throws -> Bool? {
+        switch gd_embed_show_consent_ex(try consentJSON(options)) {
+        case 1: return true
+        case 0:
+            let why = lastError() // thread-local: read it now
+            if why.code == "bad_config" { throw why }
+            return false
         default: return nil
         }
     }
@@ -183,8 +229,30 @@ public final class GaiaDeskEmbed {
         if !c.maskedRects.isEmpty {
             o["masks"] = c.maskedRects.map { ["x": Double($0.origin.x), "y": Double($0.origin.y), "w": Double($0.width), "h": Double($0.height)] }
         }
+        try addBrand(&o, color: c.brandColor, logo: c.logoPNG)
         let data = try JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
+    }
+
+    static func consentJSON(_ c: ConsentOptions) throws -> String {
+        var o: [String: Any] = ["capture": c.capture.rawValue, "guided": c.guided]
+        if !c.company.isEmpty { o["company"] = c.company }
+        try addBrand(&o, color: c.brandColor, logo: c.logoPNG)
+        let data = try JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
+        return String(decoding: data, as: UTF8.self)
+    }
+
+    /// `brand_color` and `logo_png_base64`, when set. The library refuses a
+    /// bad colour too; checking here names it before any native call.
+    static func addBrand(_ o: inout [String: Any], color: String?, logo: Data?) throws {
+        if let color {
+            let hex = color.utf8.dropFirst()
+            guard color.hasPrefix("#"), hex.count == 6, hex.allSatisfy({ (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0) }) else {
+                throw GaiaDeskEmbedError(code: "bad_config", message: "brandColor must be \"#RRGGBB\" (not \"\(color)\")")
+            }
+            o["brand_color"] = color
+        }
+        if let logo, !logo.isEmpty { o["logo_png_base64"] = logo.base64EncodedString() }
     }
 
     static func lastError() -> GaiaDeskEmbedError {

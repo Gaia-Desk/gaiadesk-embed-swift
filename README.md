@@ -31,14 +31,14 @@ console's Support page and, if you allow it, guide it: click and type **inside y
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.1.0"),
+.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.2.0"),
 // target:
 .product(name: "GaiaDeskEmbed", package: "gaiadesk-embed-swift"),
 ```
 
 SwiftPM downloads the native library (`GaiaDeskEmbedFFI.xcframework`) from this repository's
 release and checks it against the checksum in `Package.swift`. To build against a local copy
-(`scripts/fetch-binary.sh 0.1.0` puts the release's in `Frameworks/`), set
+(`scripts/fetch-binary.sh 0.2.0` puts the release's in `Frameworks/`), set
 `GAIADESK_EMBED_LOCAL_BINARY=1`. Your app needs the **Screen Recording** permission (`NSScreenCaptureUsageDescription`
 is not required, but macOS asks the user the first time).
 
@@ -96,6 +96,28 @@ Your support team opens **Support** in the GaiaDesk console, sees the waiting cu
 | `guided` | `false` (default). `true` allows guided input in a `cobrowse` session |
 | `fps` | 1–30 (default 15) |
 | `maskedRects` | regions painted out from the first frame (see Masking) |
+| `brandColor` | `"#RRGGBB"`, the indicator's accent (see Branding) |
+| `logoPNG` | your logo, PNG `Data` of at most 256 KiB (see Branding) |
+
+### Branding
+
+Your customer sees your brand, not ours: `company` on the consent dialog and the indicator, plus
+(libgaiadesk_embed 0.2.0) your colour and logo.
+
+```swift
+let logo = try Data(contentsOf: Bundle.main.url(forResource: "logo", withExtension: "png")!)
+let brand = (color: "#0f766e", logo: logo)   // a PNG, at most 256 KiB
+
+guard try GaiaDeskEmbed.requestConsent(.init(company: "Acme", brandColor: brand.color, logoPNG: brand.logo)) == true else { return }
+help = try GaiaDeskEmbed.start(
+    .init(embedToken: token, company: "Acme", windowNumber: window.windowNumber, brandColor: brand.color, logoPNG: brand.logo),
+    consentGranted: true
+) { event in /* … */ }
+```
+
+A colour that is not `#RRGGBB` throws `GaiaDeskEmbedError` (`bad_config`) before anything native
+runs; a logo the library refuses (not a PNG, over 256 KiB) throws `bad_config` from
+`requestConsent(_:)` or `start`, and is never read as a decline.
 
 ### Masking
 
@@ -137,7 +159,7 @@ GAIADESK_EMBED_TOKEN=gdemb_… swift run HelpDeskDemo
 
 ## Links
 
-- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.1.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
+- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.2.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
 - Guide: [Embedding GaiaDesk](https://gaiadesk.net/docs/embedding-gaiadesk) on gaiadesk.net
 - Embed SDKs: [Web](https://github.com/Gaia-Desk/gaiadesk-embed) · [Electron](https://github.com/Gaia-Desk/gaiadesk-embed-electron) · [macOS (Swift)](https://github.com/Gaia-Desk/gaiadesk-embed-swift) · [C/C++ and Qt](https://github.com/Gaia-Desk/gaiadesk-embed-cpp) · [.NET](https://github.com/Gaia-Desk/gaiadesk-embed-dotnet) · [iOS](https://github.com/Gaia-Desk/gaiadesk-embed-ios) · [Android](https://github.com/Gaia-Desk/gaiadesk-embed-android) · [React Native](https://github.com/Gaia-Desk/gaiadesk-embed-react-native) · [Flutter](https://github.com/Gaia-Desk/gaiadesk-embed-flutter)
 - [Changelog](CHANGELOG.md) · [Security policy](https://github.com/Gaia-Desk/.github/blob/main/SECURITY.md)

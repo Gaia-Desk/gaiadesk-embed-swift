@@ -3,7 +3,7 @@
 # Frameworks/ (where Package.swift's binary target looks), verifying the
 # SwiftPM checksum published with it.
 #
-# Usage: scripts/fetch-binary.sh <version>     e.g. scripts/fetch-binary.sh 0.1.0
+# Usage: scripts/fetch-binary.sh <version>     e.g. scripts/fetch-binary.sh 0.2.0
 set -euo pipefail
 
 VERSION="${1:?usage: scripts/fetch-binary.sh <version>}"

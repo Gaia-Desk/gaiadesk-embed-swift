@@ -12,8 +12,8 @@
 import PackageDescription
 
 // Set by scripts/release.sh for each release.
-let binaryVersion = "0.1.0"
-let binaryChecksum = "dc6e2ee1b47123680003c675b2214807270b131b0be0052de1cccf8fe8c52ff8"
+let binaryVersion = "0.2.0"
+let binaryChecksum = "1cd55c271752412e3bd1cd38b6c7259cac1db073cf4b09fd0239f9e5bacc2db5"
 
 let ffi: Target = Context.environment["GAIADESK_EMBED_LOCAL_BINARY"] != nil
     ? .binaryTarget(name: "GaiaDeskEmbedFFI", path: "Frameworks/GaiaDeskEmbedFFI.xcframework")

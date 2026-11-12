@@ -12,11 +12,8 @@
 import PackageDescription
 
 // Set by scripts/release.sh for each release.
-// RELEASE 0.4.0: still the 0.3.1 binary. Set binaryVersion = "0.4.0" and binaryChecksum to
-// `swift package compute-checksum GaiaDeskEmbedFFI.xcframework.zip` of the 0.4.0 asset once the
-// v0.4.0 release exists (GaiaDeskEmbed 0.4.0 needs libgaiadesk_embed 0.4.0's symbols).
-let binaryVersion = "0.3.1"
-let binaryChecksum = "aeac5267ae325c2cdb4ea70dffb4e12e7e6af907138835d3e6243868292a85aa"
+let binaryVersion = "0.4.0"
+let binaryChecksum = "d8b72ec64af0927ba96eae38f968e1ccfdab3f739b169ced10e1db4a5afc713f"
 
 let ffi: Target = Context.environment["GAIADESK_EMBED_LOCAL_BINARY"] != nil
     ? .binaryTarget(name: "GaiaDeskEmbedFFI", path: "Frameworks/GaiaDeskEmbedFFI.xcframework")

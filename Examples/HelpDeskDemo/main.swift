@@ -94,24 +94,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func getHelp() {
         if help != nil { return }
         let guided = env["GAIADESK_DEMO_GUIDED"] == "1"
-        let agreed: Bool
-        if env["GAIADESK_DEMO_TEST_CONSENT"] == "1" {
-            agreed = true // automated tests only: never ship this
-        } else {
-            agreed = GaiaDeskEmbed.requestConsent(company: "Acme", capture: .window, guided: guided) ?? false
-        }
-        guard agreed else {
-            status.stringValue = "Not shared."
-            emit(["type": "demo", "consent": false])
-            return
-        }
         // The card's mask goes in the start config: it covers the very first frame.
         let masks = GaiaDeskEmbed.rectInWindow(card).map { [$0] } ?? []
         var config = GaiaDeskEmbed.Configuration(embedToken: (env["GAIADESK_EMBED_TOKEN"] ?? token.stringValue).trimmingCharacters(in: .whitespaces), company: "Acme", windowNumber: window.windowNumber, guided: guided, maskedRects: masks)
         if let s = env["GAIADESK_SERVER"] { config.server = URL(string: s) }
         do {
-            let h = try GaiaDeskEmbed.start(config, consentGranted: true) { [weak self] e in self?.on(e) }
-            help = h
+            if env["GAIADESK_DEMO_TEST_CONSENT"] == "1" {
+                // automated tests only: never ship this
+                help = try GaiaDeskEmbed.start(config, consentGranted: true) { [weak self] e in self?.on(e) }
+                return
+            }
+            // The consent step: a preview of exactly what support sees, the customer's choices, a receipt.
+            let decision = try GaiaDeskEmbed.consent(.init(company: "Acme", capture: .window, guided: guided, masked: true, parentWindow: window, choices: .init(offerGuided: true), windowNumber: window.windowNumber, maskedRects: masks))
+            guard decision.decision == .accepted else {
+                status.stringValue = "Not shared."
+                emit(["type": "demo", "consent": false, "decision": decision.decision.rawValue])
+                return
+            }
+            help = try GaiaDeskEmbed.start(config, consent: decision) { [weak self] e in self?.on(e) }
         } catch let e as GaiaDeskEmbedError {
             status.stringValue = "Could not start: \(e.message)"
             emit(["type": "demo", "start_error": e.code])
@@ -140,6 +140,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             emit(["type": "error", "code": code, "message": message])
         case let .indicatorMoved(x, y):
             emit(["type": "indicator_moved", "x": x, "y": y])
+        case let .choices(c):
+            emit(["type": "choices", "guided": c.guided, "share_logs": c.shareLogs, "capture": c.capture.rawValue])
+        case .consentShown, .consentAccepted, .consentDeclined:
+            break // consent(_:)'s own events; this demo passes no handler there
         case let .ended(reason):
             status.stringValue = "Sharing ended (\(reason))."
             help = nil

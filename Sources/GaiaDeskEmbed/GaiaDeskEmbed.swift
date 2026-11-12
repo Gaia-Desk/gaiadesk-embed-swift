@@ -74,8 +74,14 @@ public final class GaiaDeskEmbed {
         /// `.indicatorMoved` you kept): restored while it fits on a screen.
         /// Needs libgaiadesk_embed 0.3.0.
         public var indicatorOrigin: CGPoint?
+        /// `consent(_:)`'s / `recordConsent(_:)`'s token (`start(_:consent:onEvent:)`
+        /// sets it). Needs libgaiadesk_embed 0.4.0.
+        public var consentToken: String?
+        /// `consent(_:)`'s / `recordConsent(_:)`'s receipt, sent with the join
+        /// (`start(_:consent:onEvent:)` sets it). Needs libgaiadesk_embed 0.4.0.
+        public var consentReceipt: ConsentReceipt?
 
-        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = [], brandColor: String? = nil, logoPNG: Data? = nil, parentWindow: NSWindow? = nil, indicatorPosition: IndicatorPosition? = nil, indicatorOrigin: CGPoint? = nil) {
+        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = [], brandColor: String? = nil, logoPNG: Data? = nil, parentWindow: NSWindow? = nil, indicatorPosition: IndicatorPosition? = nil, indicatorOrigin: CGPoint? = nil, consentToken: String? = nil, consentReceipt: ConsentReceipt? = nil) {
             self.embedToken = embedToken
             self.server = server
             self.company = company
@@ -89,6 +95,8 @@ public final class GaiaDeskEmbed {
             self.parentWindow = parentWindow
             self.indicatorPosition = indicatorPosition
             self.indicatorOrigin = indicatorOrigin
+            self.consentToken = consentToken
+            self.consentReceipt = consentReceipt
         }
     }
 
@@ -132,13 +140,24 @@ public final class GaiaDeskEmbed {
         /// The customer dragged the indicator: keep it and pass it back as
         /// `indicatorOrigin`. Needs libgaiadesk_embed 0.3.0.
         case indicatorMoved(x: Double, y: Double)
+        /// What the session runs with: right after `.state("waiting")` when
+        /// the consent step's choices went with the join. 0.4.0.
+        case choices(ConsentChoices)
+        /// `consent(_:)`'s dialog is up (its locale and wording version). 0.4.0.
+        case consentShown(locale: String, wordingVersion: String)
+        /// The customer agreed in `consent(_:)`'s dialog. 0.4.0.
+        case consentAccepted(choices: ConsentChoices)
+        /// The customer said no in `consent(_:)`'s dialog: `declined` or `timeout`. 0.4.0.
+        case consentDeclined(reason: String)
         /// `stopped`, `app_stopped`, `customer_cancelled` (Cancel or `stop()`
         /// before an agent was admitted; libgaiadesk_embed 0.3.0),
-        /// `disconnected`, `expired`, `error`. Always last.
+        /// `customer_declined` / `consent_timeout` (the consent receipt said
+        /// no, or the dialog timed out; 0.4.0), `disconnected`, `expired`,
+        /// `error`. Always last.
         case ended(reason: String)
     }
 
-    /// The library's version ("0.3.0").
+    /// The library's version ("0.4.0").
     public static var version: String { String(cString: gd_embed_version()) }
 
     /// What the bundled binary is (JSON: version, codec, os, arch, test_source).
@@ -185,16 +204,15 @@ public final class GaiaDeskEmbed {
         let cb = GdEmbedCallbacks(on_event: { userData, eventJSON in
             guard let userData, let eventJSON else { return }
             let box = Unmanaged<EventBox>.fromOpaque(userData).takeUnretainedValue()
-            let text = String(cString: eventJSON)
-            let event = GaiaDeskEmbed.parse(text)
-            if case .some(.ended) = event {
+            let events = GaiaDeskEmbed.events(String(cString: eventJSON))
+            if case .some(.ended) = events.first {
                 // The last event: drop the reference the library held.
                 DispatchQueue.main.async {
-                    box.deliver(event)
+                    events.forEach(box.deliver)
                     Unmanaged<EventBox>.fromOpaque(userData).release()
                 }
-            } else if let event {
-                DispatchQueue.main.async { box.deliver(event) }
+            } else if !events.isEmpty {
+                DispatchQueue.main.async { events.forEach(box.deliver) }
             }
         }, user_data: ctx)
         guard let h = gd_embed_start(json, cb) else {
@@ -263,12 +281,14 @@ public final class GaiaDeskEmbed {
         if let s = c.server { o["server"] = s.absoluteString }
         if let w = c.windowNumber { o["window_id"] = w }
         if !c.maskedRects.isEmpty {
-            o["masks"] = c.maskedRects.map { ["x": Double($0.origin.x), "y": Double($0.origin.y), "w": Double($0.width), "h": Double($0.height)] }
+            o["masks"] = c.maskedRects.map(maskJSON)
         }
         try addBrand(&o, color: c.brandColor, logo: c.logoPNG)
         addParent(&o, c.parentWindow)
         if let p = c.indicatorPosition { o["indicator_position"] = p.rawValue }
         if let p = c.indicatorOrigin { o["indicator_origin"] = ["x": Double(p.x), "y": Double(p.y)] }
+        if let t = c.consentToken { o["consent_token"] = t }
+        if let r = c.consentReceipt { o["consent_receipt"] = try JSONSerialization.jsonObject(with: JSONEncoder().encode(r)) }
         let data = try JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }
@@ -325,8 +345,21 @@ public final class GaiaDeskEmbed {
             guard let x = (o["x"] as? NSNumber)?.doubleValue, let y = (o["y"] as? NSNumber)?.doubleValue else { return nil }
             return .indicatorMoved(x: x, y: y)
         case "ended": return .ended(reason: s("reason") ?? "")
+        case "consent_shown": return .consentShown(locale: s("locale") ?? "", wordingVersion: s("wording_version") ?? "")
+        case "consent_accepted": return parseChoices(o["choices"]).map { .consentAccepted(choices: $0) }
+        case "consent_declined": return .consentDeclined(reason: s("reason") ?? "declined")
         default: return nil
         }
+    }
+
+    /// One event's JSON → what is delivered: the event, then `.choices` for a
+    /// `waiting` state that carries them.
+    static func events(_ json: String) -> [Event] {
+        guard let e = parse(json) else { return [] }
+        guard e == .state("waiting"), let d = json.data(using: .utf8),
+              let o = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
+              let ch = parseChoices(o["choices"]) else { return [e] }
+        return [e, .choices(ch)]
     }
 }
 

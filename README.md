@@ -12,8 +12,9 @@ console's Support page and, if you allow it, guide it: click and type **inside y
 
 - Swift Package wrapping `libgaiadesk_embed` (a prebuilt universal XCFramework, Apple silicon and
   Intel, macOS 12.3+).
-- **Consent first**: the library refuses to start until your user has agreed. Use its native
-  consent dialog or your own.
+- **Consent first**: the library refuses to start until your user has agreed. Its consent step
+  shows a live preview of exactly what support will see, lets the customer choose, and keeps a
+  consent receipt (0.4.0).
 - Shares **your app's own window** by default (ScreenCaptureKit window capture). Your app's other
   windows, other apps and the desktop are never in the picture unless you opt into `.app` or
   `.screen`.
@@ -31,14 +32,14 @@ console's Support page and, if you allow it, guide it: click and type **inside y
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.3.1"),
+.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.4.0"),
 // target:
 .product(name: "GaiaDeskEmbed", package: "gaiadesk-embed-swift"),
 ```
 
 SwiftPM downloads the native library (`GaiaDeskEmbedFFI.xcframework`) from this repository's
 release and checks it against the checksum in `Package.swift`. To build against a local copy
-(`scripts/fetch-binary.sh 0.3.1` puts the release's in `Frameworks/`), set
+(`scripts/fetch-binary.sh 0.4.0` puts the release's in `Frameworks/`), set
 `GAIADESK_EMBED_LOCAL_BINARY=1`. Your app needs the **Screen Recording** permission (`NSScreenCaptureUsageDescription`
 is not required, but macOS asks the user the first time).
 
@@ -61,11 +62,12 @@ anyone's.)
 import GaiaDeskEmbed
 
 @MainActor func getHelp(token: String, window: NSWindow) {
-    guard GaiaDeskEmbed.requestConsent(company: "Acme") == true else { return }
     do {
+        let decision = try GaiaDeskEmbed.consent(.init(company: "Acme", parentWindow: window, windowNumber: window.windowNumber))
+        guard decision.decision == .accepted else { return }
         let help = try GaiaDeskEmbed.start(
             .init(embedToken: token, company: "Acme", windowNumber: window.windowNumber),
-            consentGranted: true
+            consent: decision
         ) { event in
             switch event {
             case let .code(code, _, _): print("support code", code)   // read it to the agent
@@ -81,6 +83,44 @@ import GaiaDeskEmbed
     } catch {}
 }
 ```
+
+### The consent step
+
+Use the library's consent step, `consent(_:)` (libgaiadesk_embed 0.4.0), rather than
+`consentGranted: true` after a dialog of your own. It gives you, with no UI to build:
+
+- a **live preview** of exactly what support will see, masked fields already black;
+- **per-session choices** for the customer: allow click-and-type or keep it view-only, share app
+  logs, one window or the whole screen (each only when you offer it);
+- a **consent receipt** (who agreed to what, when, to which wording, hashed), stored on the
+  support session and shown in the console;
+- wording **localized** into 14 languages (or your own), and an **accessible** dialog: keyboard
+  only, Enter accepts, Esc declines, VoiceOver labels, reduced motion.
+
+```swift
+let decision = try GaiaDeskEmbed.consent(.init(
+    company: "Acme", guided: true, masked: true, parentWindow: window,
+    theme: .init(accent: "#0f766e", radius: 12),
+    choices: .init(offerGuided: true, offerLogs: true),
+    privacyURL: URL(string: "https://acme.example/privacy"),
+    server: URL(string: "https://gaiadesk.net"), embedToken: token, sessionId: sessionId,
+                                                 // all three: the library posts the receipt, shows who is waiting
+    windowNumber: window.windowNumber, maskedRects: masks
+)) { event in print(event) }                     // .consentShown, .consentAccepted / .consentDeclined
+switch decision.decision {
+case .accepted: help = try GaiaDeskEmbed.start(config, consent: decision) { event in /* … */ }
+case .declined, .timeout: break                  // the receipt says so; the session leaves the queue
+case .unavailable: break                         // no dialog here: ask with your own, then recordConsent
+}
+```
+
+`start(_:consent:onEvent:)` sends the decision's `consentToken` and `consentReceipt` with the join
+and starts with what the customer chose (their capture; `guided` only if they allowed it). Main
+thread only (`wrong_thread` otherwise); refused options throw `bad_config`, never a decline.
+`preview(_:)` gives you the same picture (`ConsentPreview`: PNG `Data`, size, masked count) for a
+UI of your own; `recordConsent(_:)` turns your own UI's answer (`ConsentAnswer`: decision,
+choices, the strings you showed) into the same `ConsentDecision` and receipt. `requestConsent`
+still works as in 0.3.
 
 Your support team opens **Support** in the GaiaDesk console, sees the waiting customer and joins
 (or types the nine-digit code).
@@ -101,6 +141,7 @@ Your support team opens **Support** in the GaiaDesk console, sees the waiting cu
 | `parentWindow` | the window asking for help; default your app's focused window (see The indicator) |
 | `indicatorPosition` | `.topLeft`, `.topRight` (default), `.bottomLeft`, `.bottomRight` |
 | `indicatorOrigin` | where the customer last dragged the indicator (see The indicator) |
+| `consentToken`, `consentReceipt` | from `consent(_:)` / `recordConsent(_:)`; `start(_:consent:onEvent:)` sets both (0.4.0) |
 
 ### Branding
 
@@ -166,15 +207,18 @@ or on a masked view is refused. Your customer pauses it with **Pause control** o
 | Event | |
 |---|---|
 | `.state(s)` | `starting`, `waiting`, `connected`, `ended` |
+| `.choices(_)` | right after `.state("waiting")`: the consent step's choices the session runs with (0.4.0) |
 | `.code(code, sessionId:, mode:)` | registered; `code` is what the agent joins with |
 | `.joined(agent:)` / `.left` | an agent joined / left |
 | `.control(allowed:)` | guided input paused or resumed |
 | `.action(_, applied:, reason:)` | a guided request and its outcome |
 | `.error(code:, message:)` | e.g. `capture_failed`, `connect_failed`, `indicator_unavailable` |
 | `.indicatorMoved(x:, y:)` | the customer dragged the indicator (keep it for `indicatorOrigin`; 0.3.0) |
-| `.ended(reason:)` | `stopped` (the customer), `app_stopped`, `customer_cancelled` (Cancel or `stop()` before an agent was admitted; 0.3.0), `disconnected`, `expired`, `error` — always last |
+| `.ended(reason:)` | `stopped` (the customer), `app_stopped`, `customer_cancelled` (Cancel or `stop()` before an agent was admitted; 0.3.0), `customer_declined` / `consent_timeout` (the consent step said no or timed out; 0.4.0), `disconnected`, `expired`, `error` — always last |
 
-Events arrive on the main queue.
+Events arrive on the main queue. `consent(_:)`'s handler gets `.consentShown(locale:wordingVersion:)`,
+`.consentAccepted(choices:)` and `.consentDeclined(reason:)` (`declined` or `timeout`) before it
+returns.
 
 ## Example
 
@@ -186,7 +230,7 @@ GAIADESK_EMBED_TOKEN=gdemb_… swift run HelpDeskDemo
 
 ## Links
 
-- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.3.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
+- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.4.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
 - Guide: [Embedding GaiaDesk](https://gaiadesk.net/docs/embedding-gaiadesk) on gaiadesk.net
 - Embed SDKs: [Web](https://github.com/Gaia-Desk/gaiadesk-embed) · [Electron](https://github.com/Gaia-Desk/gaiadesk-embed-electron) · [macOS (Swift)](https://github.com/Gaia-Desk/gaiadesk-embed-swift) · [C/C++ and Qt](https://github.com/Gaia-Desk/gaiadesk-embed-cpp) · [.NET](https://github.com/Gaia-Desk/gaiadesk-embed-dotnet) · [iOS](https://github.com/Gaia-Desk/gaiadesk-embed-ios) · [Android](https://github.com/Gaia-Desk/gaiadesk-embed-android) · [React Native](https://github.com/Gaia-Desk/gaiadesk-embed-react-native) · [Flutter](https://github.com/Gaia-Desk/gaiadesk-embed-flutter)
 - [Changelog](CHANGELOG.md) · [Security policy](https://github.com/Gaia-Desk/.github/blob/main/SECURITY.md)

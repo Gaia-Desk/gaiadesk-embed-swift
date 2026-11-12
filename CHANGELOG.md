@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.4.0
+
+- libgaiadesk_embed 0.4.0: the consent step. `consent(_: ConsentStepOptions, onEvent:)` (main
+  thread) shows the library's dialog with a live preview of what support will see, per-session
+  choices (`ConsentOffers`), theme, locale and wording, and returns a `ConsentDecision`
+  (`.accepted` / `.declined` / `.timeout` / `.unavailable`, `ConsentChoices`, `consentToken`,
+  `ConsentReceipt`). `preview(_:)` returns one frame (`ConsentPreview`); `recordConsent(_:
+  ConsentAnswer)` makes your own UI's answer a receipt.
+- `start(_:consent:onEvent:)`, and `Configuration.consentToken` / `consentReceipt`.
+- New events `.consentShown`, `.consentAccepted`, `.consentDeclined` (from `consent(_:)`) and
+  `.choices` (after `.state("waiting")`); new ended reasons `customer_declined` and
+  `consent_timeout`. `Event` gains cases, so an exhaustive `switch` over it needs them.
+- The README recommends the consent step over `consentGranted: true` after a dialog of your own.
+  `requestConsent` is unchanged.
+
 ## 0.3.0
 
 - libgaiadesk_embed 0.3.0: the consent dialog and indicator attach to the calling window.

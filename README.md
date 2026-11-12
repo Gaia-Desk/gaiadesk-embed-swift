@@ -31,14 +31,14 @@ console's Support page and, if you allow it, guide it: click and type **inside y
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.3.0"),
+.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.3.1"),
 // target:
 .product(name: "GaiaDeskEmbed", package: "gaiadesk-embed-swift"),
 ```
 
 SwiftPM downloads the native library (`GaiaDeskEmbedFFI.xcframework`) from this repository's
 release and checks it against the checksum in `Package.swift`. To build against a local copy
-(`scripts/fetch-binary.sh 0.3.0` puts the release's in `Frameworks/`), set
+(`scripts/fetch-binary.sh 0.3.1` puts the release's in `Frameworks/`), set
 `GAIADESK_EMBED_LOCAL_BINARY=1`. Your app needs the **Screen Recording** permission (`NSScreenCaptureUsageDescription`
 is not required, but macOS asks the user the first time).
 

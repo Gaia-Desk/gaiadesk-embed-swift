@@ -31,14 +31,14 @@ console's Support page and, if you allow it, guide it: click and type **inside y
 
 ```swift
 // Package.swift
-.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.2.0"),
+.package(url: "https://github.com/Gaia-Desk/gaiadesk-embed-swift.git", from: "0.3.0"),
 // target:
 .product(name: "GaiaDeskEmbed", package: "gaiadesk-embed-swift"),
 ```
 
 SwiftPM downloads the native library (`GaiaDeskEmbedFFI.xcframework`) from this repository's
 release and checks it against the checksum in `Package.swift`. To build against a local copy
-(`scripts/fetch-binary.sh 0.2.0` puts the release's in `Frameworks/`), set
+(`scripts/fetch-binary.sh 0.3.0` puts the release's in `Frameworks/`), set
 `GAIADESK_EMBED_LOCAL_BINARY=1`. Your app needs the **Screen Recording** permission (`NSScreenCaptureUsageDescription`
 is not required, but macOS asks the user the first time).
 
@@ -98,6 +98,9 @@ Your support team opens **Support** in the GaiaDesk console, sees the waiting cu
 | `maskedRects` | regions painted out from the first frame (see Masking) |
 | `brandColor` | `"#RRGGBB"`, the indicator's accent (see Branding) |
 | `logoPNG` | your logo, PNG `Data` of at most 256 KiB (see Branding) |
+| `parentWindow` | the window asking for help; default your app's focused window (see The indicator) |
+| `indicatorPosition` | `.topLeft`, `.topRight` (default), `.bottomLeft`, `.bottomRight` |
+| `indicatorOrigin` | where the customer last dragged the indicator (see The indicator) |
 
 ### Branding
 
@@ -118,6 +121,29 @@ help = try GaiaDeskEmbed.start(
 A colour that is not `#RRGGBB` throws `GaiaDeskEmbedError` (`bad_config`) before anything native
 runs; a logo the library refuses (not a PNG, over 256 KiB) throws `bad_config` from
 `requestConsent(_:)` or `start`, and is never read as a decline.
+
+With libgaiadesk_embed 0.3.0, `ConsentOptions` also takes `masked: true` (the dialog says private
+fields stay hidden; pass the masks too) and `parentWindow`: the dialog is a sheet on that window,
+never behind it (default: your app's focused window). Without a logo it shows your app icon.
+
+### The indicator
+
+(libgaiadesk_embed 0.3.0) The indicator starts top right, clear of `parentWindow`, or in the
+corner `indicatorPosition` names. Your customer can drag it; each drag sends
+`.indicatorMoved(x:y:)`. The library writes nothing to disk, so keep the place yourself and pass
+it back as `indicatorOrigin` next time (restored while it fits on a screen):
+
+```swift
+case let .indicatorMoved(x, y): UserDefaults.standard.set([x, y], forKey: "helpIndicator")
+// next start:
+if let p = UserDefaults.standard.array(forKey: "helpIndicator") as? [Double], p.count == 2 {
+    config.indicatorOrigin = CGPoint(x: p[0], y: p[1])
+}
+```
+
+Until an agent is admitted the indicator offers **Cancel**: the request leaves your support team's
+queue at once and the session ends with `customer_cancelled` (as does `stop()` before an agent was
+admitted).
 
 ### Masking
 
@@ -145,7 +171,8 @@ or on a masked view is refused. Your customer pauses it with **Pause control** o
 | `.control(allowed:)` | guided input paused or resumed |
 | `.action(_, applied:, reason:)` | a guided request and its outcome |
 | `.error(code:, message:)` | e.g. `capture_failed`, `connect_failed`, `indicator_unavailable` |
-| `.ended(reason:)` | `stopped` (the customer), `app_stopped`, `disconnected`, `expired`, `error` — always last |
+| `.indicatorMoved(x:, y:)` | the customer dragged the indicator (keep it for `indicatorOrigin`; 0.3.0) |
+| `.ended(reason:)` | `stopped` (the customer), `app_stopped`, `customer_cancelled` (Cancel or `stop()` before an agent was admitted; 0.3.0), `disconnected`, `expired`, `error` — always last |
 
 Events arrive on the main queue.
 
@@ -159,7 +186,7 @@ GAIADESK_EMBED_TOKEN=gdemb_… swift run HelpDeskDemo
 
 ## Links
 
-- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.2.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
+- Swift Package Manager: `https://github.com/Gaia-Desk/gaiadesk-embed-swift.git` (from `0.3.0`); the binary comes from the [latest release](https://github.com/Gaia-Desk/gaiadesk-embed-swift/releases/latest)
 - Guide: [Embedding GaiaDesk](https://gaiadesk.net/docs/embedding-gaiadesk) on gaiadesk.net
 - Embed SDKs: [Web](https://github.com/Gaia-Desk/gaiadesk-embed) · [Electron](https://github.com/Gaia-Desk/gaiadesk-embed-electron) · [macOS (Swift)](https://github.com/Gaia-Desk/gaiadesk-embed-swift) · [C/C++ and Qt](https://github.com/Gaia-Desk/gaiadesk-embed-cpp) · [.NET](https://github.com/Gaia-Desk/gaiadesk-embed-dotnet) · [iOS](https://github.com/Gaia-Desk/gaiadesk-embed-ios) · [Android](https://github.com/Gaia-Desk/gaiadesk-embed-android) · [React Native](https://github.com/Gaia-Desk/gaiadesk-embed-react-native) · [Flutter](https://github.com/Gaia-Desk/gaiadesk-embed-flutter)
 - [Changelog](CHANGELOG.md) · [Security policy](https://github.com/Gaia-Desk/.github/blob/main/SECURITY.md)

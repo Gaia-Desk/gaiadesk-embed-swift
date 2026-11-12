@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.0
+
+- libgaiadesk_embed 0.3.0: the consent dialog and indicator attach to the calling window.
+  `Configuration.parentWindow` / `ConsentOptions.parentWindow` (`NSWindow`, default: your app's
+  focused window) make the dialog a sheet on it and keep the indicator clear of it.
+- `Configuration.indicatorPosition` (a corner) and `Configuration.indicatorOrigin` (a place you
+  kept from the new `.indicatorMoved(x:y:)` event) set where the indicator appears.
+- `ConsentOptions.masked`: the dialog says private fields stay hidden.
+- New ended reason `customer_cancelled`: Cancel on the indicator, or `stop()`, before an agent was
+  admitted. `Event` gains a case, so an exhaustive `switch` over it needs `.indicatorMoved`.
+
 ## 0.2.0
 
 - libgaiadesk_embed 0.2.0: white-label branding. `Configuration.brandColor` (`#RRGGBB`) and

@@ -138,6 +138,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             emit(["type": "action", "action": name, "applied": applied, "reason": reason ?? NSNull()])
         case let .error(code, message):
             emit(["type": "error", "code": code, "message": message])
+        case let .indicatorMoved(x, y):
+            emit(["type": "indicator_moved", "x": x, "y": y])
         case let .ended(reason):
             status.stringValue = "Sharing ended (\(reason))."
             help = nil

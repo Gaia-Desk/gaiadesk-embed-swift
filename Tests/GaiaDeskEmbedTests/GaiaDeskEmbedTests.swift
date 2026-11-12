@@ -72,6 +72,26 @@ final class GaiaDeskEmbedTests: XCTestCase {
     }
 
     @MainActor
+    func testParentWindowAndIndicatorPlaceGoInTheStartConfigOnlyWhenSet() throws {
+        let w = NSWindow(contentRect: .init(x: 0, y: 0, width: 10, height: 10), styleMask: [], backing: .buffered, defer: true)
+        let c = GaiaDeskEmbed.Configuration(embedToken: token, company: "Acme", parentWindow: w, indicatorPosition: .bottomLeft, indicatorOrigin: CGPoint(x: 120, y: 48.5))
+        let o = try JSONSerialization.jsonObject(with: Data(try GaiaDeskEmbed.configJSON(c, consentGranted: true).utf8)) as! [String: Any]
+        XCTAssertEqual(o["parent_window"] as? Int, Int(bitPattern: Unmanaged.passUnretained(w).toOpaque()))
+        XCTAssertEqual(o["indicator_position"] as? String, "bottom-left")
+        XCTAssertEqual(o["indicator_origin"] as? [String: Double], ["x": 120, "y": 48.5])
+        let plain = try GaiaDeskEmbed.configJSON(.init(embedToken: token, company: "Acme"), consentGranted: true)
+        XCTAssertFalse(plain.contains("parent_window") || plain.contains("indicator_"))
+        XCTAssertEqual(GaiaDeskEmbed.IndicatorPosition.topRight.rawValue, "top-right")
+    }
+
+    @MainActor
+    func testConsentMaskedAndParentWindow() throws {
+        let w = NSWindow(contentRect: .init(x: 0, y: 0, width: 10, height: 10), styleMask: [], backing: .buffered, defer: true)
+        let ptr = Int(bitPattern: Unmanaged.passUnretained(w).toOpaque())
+        XCTAssertEqual(try GaiaDeskEmbed.consentJSON(.init(company: "Acme", masked: true, parentWindow: w)), #"{"capture":"window","company":"Acme","guided":false,"masked":true,"parent_window":\#(ptr)}"#)
+    }
+
+    @MainActor
     func testARefusedLogoIsAnErrorNotADecline() {
         // Not a PNG: the library refuses before any dialog is shown.
         XCTAssertThrowsError(try GaiaDeskEmbed.requestConsent(.init(company: "Acme", logoPNG: Data("GIF89a".utf8)))) { err in
@@ -83,6 +103,9 @@ final class GaiaDeskEmbedTests: XCTestCase {
         XCTAssertEqual(GaiaDeskEmbed.parse(#"{"type":"code","code":"123456789","session_id":"ss_1","mode":"view"}"#), .code("123456789", sessionId: "ss_1", mode: "view"))
         XCTAssertEqual(GaiaDeskEmbed.parse(#"{"type":"action","action":"click","applied":false,"reason":"view_only"}"#), .action("click", applied: false, reason: "view_only"))
         XCTAssertEqual(GaiaDeskEmbed.parse(#"{"type":"ended","reason":"stopped"}"#), .ended(reason: "stopped"))
+        XCTAssertEqual(GaiaDeskEmbed.parse(#"{"type":"ended","reason":"customer_cancelled"}"#), .ended(reason: "customer_cancelled"))
+        XCTAssertEqual(GaiaDeskEmbed.parse(#"{"type":"indicator_moved","x":812,"y":40.5}"#), .indicatorMoved(x: 812, y: 40.5))
+        XCTAssertNil(GaiaDeskEmbed.parse(#"{"type":"indicator_moved"}"#))
         XCTAssertNil(GaiaDeskEmbed.parse(#"{"type":"future_thing"}"#))
     }
 

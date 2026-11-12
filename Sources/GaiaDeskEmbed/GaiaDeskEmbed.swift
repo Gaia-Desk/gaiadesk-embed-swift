@@ -31,6 +31,14 @@ public final class GaiaDeskEmbed {
         case screen
     }
 
+    /// Where the indicator starts out (libgaiadesk_embed 0.3.0).
+    public enum IndicatorPosition: String, Sendable {
+        case topLeft = "top-left"
+        case topRight = "top-right"
+        case bottomLeft = "bottom-left"
+        case bottomRight = "bottom-right"
+    }
+
     public struct Configuration: Sendable {
         /// `gdemb_…`, from your backend (`POST /v1/support/sessions`).
         public var embedToken: String
@@ -55,8 +63,19 @@ public final class GaiaDeskEmbed {
         /// Your logo, PNG bytes (at most 256 KiB), shown small on the
         /// indicator. Needs libgaiadesk_embed 0.2.0.
         public var logoPNG: Data?
+        /// The window asking for help: the indicator keeps clear of it.
+        /// Ignored unless it is this app's; nil: the app's focused window.
+        /// Needs libgaiadesk_embed 0.3.0.
+        public var parentWindow: NSWindow?
+        /// The indicator's starting corner; nil: top right, clear of the
+        /// calling window. Needs libgaiadesk_embed 0.3.0.
+        public var indicatorPosition: IndicatorPosition?
+        /// Where the customer last dragged the indicator (an
+        /// `.indicatorMoved` you kept): restored while it fits on a screen.
+        /// Needs libgaiadesk_embed 0.3.0.
+        public var indicatorOrigin: CGPoint?
 
-        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = [], brandColor: String? = nil, logoPNG: Data? = nil) {
+        public init(embedToken: String, company: String, server: URL? = nil, capture: Capture = .window, windowNumber: Int? = nil, guided: Bool = false, fps: Int = 15, maskedRects: [CGRect] = [], brandColor: String? = nil, logoPNG: Data? = nil, parentWindow: NSWindow? = nil, indicatorPosition: IndicatorPosition? = nil, indicatorOrigin: CGPoint? = nil) {
             self.embedToken = embedToken
             self.server = server
             self.company = company
@@ -67,6 +86,9 @@ public final class GaiaDeskEmbed {
             self.maskedRects = maskedRects
             self.brandColor = brandColor
             self.logoPNG = logoPNG
+            self.parentWindow = parentWindow
+            self.indicatorPosition = indicatorPosition
+            self.indicatorOrigin = indicatorOrigin
         }
     }
 
@@ -79,15 +101,23 @@ public final class GaiaDeskEmbed {
         public var guided: Bool
         /// `"#RRGGBB"`: the dialog's accent; nil: the system's own.
         public var brandColor: String?
-        /// PNG bytes (at most 256 KiB), shown small on the dialog.
+        /// PNG bytes (at most 256 KiB), shown on the dialog; nil: the app icon.
         public var logoPNG: Data?
+        /// Say private fields stay hidden (you pass masks). Needs
+        /// libgaiadesk_embed 0.3.0.
+        public var masked: Bool
+        /// The window asking: the dialog is a sheet on it, never behind it;
+        /// nil: the app's focused window. Needs libgaiadesk_embed 0.3.0.
+        public var parentWindow: NSWindow?
 
-        public init(company: String, capture: Capture = .window, guided: Bool = false, brandColor: String? = nil, logoPNG: Data? = nil) {
+        public init(company: String, capture: Capture = .window, guided: Bool = false, brandColor: String? = nil, logoPNG: Data? = nil, masked: Bool = false, parentWindow: NSWindow? = nil) {
             self.company = company
             self.capture = capture
             self.guided = guided
             self.brandColor = brandColor
             self.logoPNG = logoPNG
+            self.masked = masked
+            self.parentWindow = parentWindow
         }
     }
 
@@ -99,10 +129,16 @@ public final class GaiaDeskEmbed {
         case control(allowed: Bool)
         case action(String, applied: Bool, reason: String?)
         case error(code: String, message: String)
+        /// The customer dragged the indicator: keep it and pass it back as
+        /// `indicatorOrigin`. Needs libgaiadesk_embed 0.3.0.
+        case indicatorMoved(x: Double, y: Double)
+        /// `stopped`, `app_stopped`, `customer_cancelled` (Cancel or `stop()`
+        /// before an agent was admitted; libgaiadesk_embed 0.3.0),
+        /// `disconnected`, `expired`, `error`. Always last.
         case ended(reason: String)
     }
 
-    /// The library's version ("0.2.0").
+    /// The library's version ("0.3.0").
     public static var version: String { String(cString: gd_embed_version()) }
 
     /// What the bundled binary is (JSON: version, codec, os, arch, test_source).
@@ -230,6 +266,9 @@ public final class GaiaDeskEmbed {
             o["masks"] = c.maskedRects.map { ["x": Double($0.origin.x), "y": Double($0.origin.y), "w": Double($0.width), "h": Double($0.height)] }
         }
         try addBrand(&o, color: c.brandColor, logo: c.logoPNG)
+        addParent(&o, c.parentWindow)
+        if let p = c.indicatorPosition { o["indicator_position"] = p.rawValue }
+        if let p = c.indicatorOrigin { o["indicator_origin"] = ["x": Double(p.x), "y": Double(p.y)] }
         let data = try JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }
@@ -238,6 +277,8 @@ public final class GaiaDeskEmbed {
         var o: [String: Any] = ["capture": c.capture.rawValue, "guided": c.guided]
         if !c.company.isEmpty { o["company"] = c.company }
         try addBrand(&o, color: c.brandColor, logo: c.logoPNG)
+        if c.masked { o["masked"] = true }
+        addParent(&o, c.parentWindow)
         let data = try JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
         return String(decoding: data, as: UTF8.self)
     }
@@ -253,6 +294,11 @@ public final class GaiaDeskEmbed {
             o["brand_color"] = color
         }
         if let logo, !logo.isEmpty { o["logo_png_base64"] = logo.base64EncodedString() }
+    }
+
+    /// `parent_window`: the NSWindow* as an integer, as the library takes it.
+    static func addParent(_ o: inout [String: Any], _ window: NSWindow?) {
+        if let window { o["parent_window"] = Int(bitPattern: Unmanaged.passUnretained(window).toOpaque()) }
     }
 
     static func lastError() -> GaiaDeskEmbedError {
@@ -275,6 +321,9 @@ public final class GaiaDeskEmbed {
         case "control": return .control(allowed: o["allowed"] as? Bool ?? false)
         case "action": return .action(s("action") ?? "", applied: o["applied"] as? Bool ?? false, reason: s("reason"))
         case "error": return .error(code: s("code") ?? "", message: s("message") ?? "")
+        case "indicator_moved":
+            guard let x = (o["x"] as? NSNumber)?.doubleValue, let y = (o["y"] as? NSNumber)?.doubleValue else { return nil }
+            return .indicatorMoved(x: x, y: y)
         case "ended": return .ended(reason: s("reason") ?? "")
         default: return nil
         }
